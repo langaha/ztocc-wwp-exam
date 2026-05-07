@@ -30,7 +30,15 @@ function getPool(): Pool {
   if (pool) return pool;
   const url = getDatabaseUrl();
   if (!url) {
-    throw new Error("DATABASE_URL/POSTGRES_URL/PRISMA_DATABASE_URL is required");
+    const keys = ["DATABASE_URL", "POSTGRES_URL", "PRISMA_DATABASE_URL"] as const;
+    const present = keys.filter((k) => {
+      const v = String(process.env[k] ?? "").trim();
+      return v.length > 0;
+    });
+    const env = String(process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "").trim() || "unknown";
+    throw new Error(
+      `DATABASE_URL/POSTGRES_URL/PRISMA_DATABASE_URL is required. env=${env}, present=${present.join(",") || "none"}`
+    );
   }
   pool = new Pool({
     connectionString: url,
