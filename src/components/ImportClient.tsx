@@ -11,6 +11,7 @@ import {
   buildColumnsForMapping,
   computeFingerprint,
   detectHeaderRow,
+  normalizeHeaderCell,
   type MappingRule,
 } from "@/lib/template";
 
@@ -56,20 +57,56 @@ export function ImportClient() {
   const canAutoProceed = useMemo(() => hasAllRequired(mapping), [mapping]);
   const [dragOver, setDragOver] = useState(false);
 
-  async function fetchSavedMapping(fp: string): Promise<MappingRule | null> {
+  async function fetchSavedMapping(fp: string): Promise<unknown | null> {
     const res = await fetch(`/api/template-mappings?fingerprint=${encodeURIComponent(fp)}`, {
       method: "GET",
     });
     const json = (await res.json().catch(() => null)) as { mapping?: unknown } | null;
     if (!json || !json.mapping) return null;
-    return json.mapping as MappingRule;
+    return json.mapping;
   }
 
-  async function saveMapping(fp: string, m: MappingRule) {
+  function remapSavedMapping(saved: unknown, currentColumns: string[]): MappingRule | null {
+    if (!saved || typeof saved !== "object") return null;
+    const payload = saved as { v?: unknown; columns?: unknown; mapping?: unknown };
+    if (payload.v !== 2) return null;
+    if (!Array.isArray(payload.columns)) return null;
+    if (!payload.mapping || typeof payload.mapping !== "object") return null;
+
+    const savedColumns = payload.columns.map((x) => String(x ?? ""));
+    const savedMapping = payload.mapping as MappingRule;
+
+    const currentIndexByKey = new Map<string, number[]>();
+    for (let i = 0; i < currentColumns.length; i++) {
+      const k = normalizeHeaderCell(currentColumns[i] ?? "");
+      if (!k) continue;
+      const cur = currentIndexByKey.get(k) ?? [];
+      cur.push(i);
+      currentIndexByKey.set(k, cur);
+    }
+
+    const next: MappingRule = {};
+    for (const key of Object.keys(savedMapping) as Array<keyof MappingRule>) {
+      const idxs = savedMapping[key] ?? [];
+      const mapped: number[] = [];
+      for (const idx of idxs) {
+        const colName = savedColumns[idx] ?? "";
+        const k = normalizeHeaderCell(colName);
+        const candidates = currentIndexByKey.get(k) ?? [];
+        if (candidates.length === 0) continue;
+        const pick = candidates[0]!;
+        if (!mapped.includes(pick)) mapped.push(pick);
+      }
+      if (mapped.length > 0) next[key] = mapped;
+    }
+    return next;
+  }
+
+  async function saveMapping(fp: string, cols: string[], m: MappingRule) {
     await fetch("/api/template-mappings", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fingerprint: fp, mapping: m }),
+      body: JSON.stringify({ fingerprint: fp, mapping: { v: 2, columns: cols, mapping: m } }),
     });
   }
 
@@ -206,7 +243,11 @@ export function ImportClient() {
 
       let m = autoMapFromColumns(cols);
       const saved = await fetchSavedMapping(fp);
-      if (saved) m = saved;
+      if (saved) {
+        const remapped = remapSavedMapping(saved, cols);
+        if (remapped) m = remapped;
+        else m = saved as MappingRule;
+      }
 
       setMapping(m);
       setProgress(0.8);
@@ -318,7 +359,7 @@ export function ImportClient() {
               setError(conflict);
               return;
             }
-            await saveMapping(fingerprint, m);
+            await saveMapping(fingerprint, columns, m);
             await finalizeImport({
               mapping: m,
               rows,

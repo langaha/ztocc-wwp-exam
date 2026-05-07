@@ -16,7 +16,7 @@
 - Next.js App Router + TypeScript
 - Tailwind CSS
 - Excel 解析：xlsx
-- 数据库：libSQL（`@libsql/client`），默认本地文件 `file:./dev.db`
+- 数据库：Postgres（`pg`），通过环境变量 `DATABASE_URL` / `POSTGRES_URL` / `PRISMA_DATABASE_URL` 连接
 
 ## 本地运行
 
@@ -28,10 +28,10 @@ npm install
 
 2. 配置环境变量（可选）
 
-复制 `.env.example` 为 `.env.local`，默认即可：
+新建 `.env.local`：
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgres://..."
 ```
 
 3. 启动
@@ -42,6 +42,22 @@ npm run dev
 
 访问：
 
-- 导入：`http://localhost:3000/`
-- 预览与编辑：`http://localhost:3000/preview`
-- 已导入运单：`http://localhost:3000/orders`
+- 导入：`http://localhost:3005/`
+- 预览与编辑：`http://localhost:3005/preview`
+- 已导入运单：`http://localhost:3005/orders`
+
+## 多模板兼容测试
+
+已提供 5 份不同模板（中文/英文/列序变化/缺少可选列/地址拆分）：
+
+- `docs/templates/01-标准模板.xlsx`
+- `docs/templates/02-英文列名模板.xlsx`
+- `docs/templates/03-列序变化模板.xlsx`
+- `docs/templates/04-缺少可选列模板.xlsx`
+- `docs/templates/05-地址拆分模板.xlsx`
+
+也可重新生成：
+
+```bash
+node scripts/generate-template-set.mjs
+```

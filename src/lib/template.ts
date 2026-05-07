@@ -8,7 +8,7 @@ export type HeaderDetection = {
   treatAsHeader: boolean;
 };
 
-function normalizeHeaderCell(input: string): string {
+export function normalizeHeaderCell(input: string): string {
   return input
     .toLowerCase()
     .replace(/\s+/g, "")
@@ -86,8 +86,11 @@ export function buildColumnsForMapping(headerRow: string[]): string[] {
 }
 
 export function computeFingerprint(columns: string[]): string {
-  const normalized = columns.map((c) => normalizeHeaderCell(c)).join("|");
-  return `v1:${normalized}`;
+  const normalized = columns
+    .map((c) => normalizeHeaderCell(c))
+    .filter((x) => x);
+  normalized.sort();
+  return `v2:${normalized.join("|")}`;
 }
 
 function safePush(map: MappingRule, key: ShipmentField, colIdx: number) {
