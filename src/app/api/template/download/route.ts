@@ -41,11 +41,12 @@ function buildWorkbook() {
 export async function GET() {
   const wb = buildWorkbook();
   const buf = XLSX.write(wb, { bookType: "xlsx", type: "buffer" }) as Buffer;
+  const body = new Uint8Array(buf);
 
   const cnName = "标准导入模板.xlsx";
   const encoded = encodeURIComponent(cnName);
 
-  return new Response(buf, {
+  return new Response(body, {
     headers: {
       "content-type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -54,4 +55,3 @@ export async function GET() {
     },
   });
 }
-
