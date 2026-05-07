@@ -17,6 +17,10 @@ export default function PreviewPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [items, setItems] = useState<ShipmentDraft[]>([]);
   const [excelRowNumbers, setExcelRowNumbers] = useState<number[]>([]);
+  const [fieldErrorsByRow, setFieldErrorsByRow] = useState<
+    Array<Partial<Record<keyof ShipmentDraft, string>>>
+  >([]);
+  const [externalCodesVersion, setExternalCodesVersion] = useState(0);
 
   const [existingCodes, setExistingCodes] = useState<Set<string>>(new Set());
   const [submitInfoByRow, setSubmitInfoByRow] = useState<Array<string | null>>([]);
@@ -35,61 +39,60 @@ export default function PreviewPage() {
       setColumns(session.columns);
       setItems(session.items);
       setExcelRowNumbers(session.excelRowNumbers);
+      setFieldErrorsByRow(session.items.map((d) => validateDraft(d)));
       setSubmitInfoByRow(new Array(session.items.length).fill(null));
+      setExternalCodesVersion((v) => v + 1);
     }
     setLoaded(true);
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
-    saveImportSession({
-      fileName,
-      fingerprint,
-      columns,
-      items,
-      excelRowNumbers,
-    });
+    const t = setTimeout(() => {
+      const run = () =>
+        saveImportSession({
+          fileName,
+          fingerprint,
+          columns,
+          items,
+          excelRowNumbers,
+        });
+      const ric = (globalThis as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+        .requestIdleCallback;
+      if (ric) ric(run, { timeout: 800 });
+      else run();
+    }, 600);
+    return () => clearTimeout(t);
   }, [loaded, fileName, fingerprint, columns, items, excelRowNumbers]);
-
-  const fieldErrorsByRow = useMemo(() => items.map((d) => validateDraft(d)), [items]);
 
   const { duplicateInfoByRow, duplicateRowSet } = useMemo(() => {
     const info = new Array<string | null>(items.length).fill(null);
     const dup = new Set<number>();
-    const codeToFirst = new Map<string, number>();
-
+    const codeToIdxs = new Map<string, number[]>();
     for (let i = 0; i < items.length; i++) {
       const code = String(items[i]?.externalCode ?? "").trim();
       if (!code) continue;
-      const prev = codeToFirst.get(code);
-      if (prev === undefined) {
-        codeToFirst.set(code, i);
-      } else {
-        dup.add(prev);
-        dup.add(i);
-      }
+      const arr = codeToIdxs.get(code) ?? [];
+      arr.push(i);
+      codeToIdxs.set(code, arr);
     }
 
-    for (const [code, firstIdx] of codeToFirst) {
-      const allIdx: number[] = [];
-      for (let i = 0; i < items.length; i++) {
-        if (String(items[i]?.externalCode ?? "").trim() === code) allIdx.push(i);
-      }
-      if (allIdx.length <= 1) continue;
+    for (const [code, idxs] of codeToIdxs) {
+      if (idxs.length <= 1) continue;
+      for (const idx of idxs) dup.add(idx);
+      const firstIdx = idxs[0]!;
       const rowA = excelRowNumbers[firstIdx] ?? firstIdx + 1;
-      for (const idx of allIdx) {
+      const others = idxs.slice(1).map((x) => excelRowNumbers[x] ?? x + 1).join("、");
+      info[firstIdx] = `第 ${rowA} 行，外部编码：与第 ${others} 行重复`;
+      for (const idx of idxs.slice(1)) {
         const rowNo = excelRowNumbers[idx] ?? idx + 1;
-        if (idx === firstIdx) continue;
         info[idx] = `第 ${rowNo} 行，外部编码：与第 ${rowA} 行重复`;
       }
-      info[firstIdx] = `第 ${rowA} 行，外部编码：与第 ${allIdx
-        .filter((x) => x !== firstIdx)
-        .map((x) => excelRowNumbers[x] ?? x + 1)
-        .join("、")} 行重复`;
+      void code;
     }
 
     return { duplicateInfoByRow: info, duplicateRowSet: dup };
-  }, [items, excelRowNumbers]);
+  }, [excelRowNumbers, items]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -115,7 +118,7 @@ export default function PreviewPage() {
     }, 300);
 
     return () => clearTimeout(t);
-  }, [loaded, items]);
+  }, [loaded, externalCodesVersion, items]);
 
   const { existingInfoByRow, existingRowSet } = useMemo(() => {
     const info = new Array<string | null>(items.length).fill(null);
@@ -339,19 +342,30 @@ export default function PreviewPage() {
           onChange={(rowIndex, field, value) => {
             setItems((prev) => {
               const next = prev.slice();
-              next[rowIndex] = { ...next[rowIndex], [field]: value };
+              const updated = { ...next[rowIndex], [field]: value };
+              next[rowIndex] = updated;
+              setFieldErrorsByRow((prevErr) => {
+                const eNext = prevErr.slice();
+                eNext[rowIndex] = validateDraft(updated);
+                return eNext;
+              });
+              if (field === "externalCode") setExternalCodesVersion((v) => v + 1);
               return next;
             });
           }}
           onDeleteRow={(rowIndex) => {
             setItems((prev) => prev.filter((_, idx) => idx !== rowIndex));
             setExcelRowNumbers((prev) => prev.filter((_, idx) => idx !== rowIndex));
+            setFieldErrorsByRow((prev) => prev.filter((_, idx) => idx !== rowIndex));
             setSubmitInfoByRow((prev) => prev.filter((_, idx) => idx !== rowIndex));
+            setExternalCodesVersion((v) => v + 1);
           }}
           onAddRow={() => {
             setItems((prev) => [...prev, createEmptyDraft()]);
             setExcelRowNumbers((prev) => [...prev, (prev[prev.length - 1] ?? prev.length) + 1]);
+            setFieldErrorsByRow((prev) => [...prev, validateDraft(createEmptyDraft())]);
             setSubmitInfoByRow((prev) => [...prev, null]);
+            setExternalCodesVersion((v) => v + 1);
           }}
         />
 

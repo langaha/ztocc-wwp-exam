@@ -1,6 +1,7 @@
 "use client";
 
 import { shipmentFieldMeta, type ShipmentDraft, type ShipmentField } from "@/lib/shipment";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 type Props = {
   items: ShipmentDraft[];
@@ -16,6 +17,23 @@ type Props = {
 
 export function DataGrid(props: Props) {
   const fields = shipmentFieldMeta.map((f) => f.key);
+  const [pageSize, setPageSize] = useState(100);
+  const [page, setPage] = useState(1);
+  const [pendingFocus, setPendingFocus] = useState<{ r: number; c: number } | null>(null);
+
+  const total = props.items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    setPage((p) => Math.max(1, Math.min(totalPages, p)));
+  }, [totalPages]);
+
+  const pageStart = (page - 1) * pageSize;
+  const pageEnd = Math.min(total, pageStart + pageSize);
+  const localItems = useMemo(
+    () => props.items.slice(pageStart, pageEnd),
+    [props.items, pageStart, pageEnd]
+  );
 
   function focusCell(r: number, c: number) {
     const el = document.querySelector<HTMLInputElement>(
@@ -25,8 +43,14 @@ export function DataGrid(props: Props) {
     el?.select?.();
   }
 
+  useEffect(() => {
+    if (!pendingFocus) return;
+    focusCell(pendingFocus.r, pendingFocus.c);
+    setPendingFocus(null);
+  }, [page, pendingFocus]);
+
   function handleKeyDown(
-    e: React.KeyboardEvent<HTMLInputElement>,
+    e: KeyboardEvent<HTMLInputElement>,
     rowIndex: number,
     colIndex: number
   ) {
@@ -58,13 +82,57 @@ export function DataGrid(props: Props) {
 
     nextR = Math.max(0, Math.min(props.items.length - 1, nextR));
     nextC = Math.max(0, Math.min(cols - 1, nextC));
+
+    const nextPage = Math.floor(nextR / pageSize) + 1;
+    if (nextPage !== page) {
+      setPage(nextPage);
+      setPendingFocus({ r: nextR, c: nextC });
+      return;
+    }
     focusCell(nextR, nextC);
   }
 
   return (
     <div className="rounded-xl border bg-white">
       <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="text-base font-semibold">数据预览与编辑</div>
+        <div className="flex items-center gap-3">
+          <div className="text-base font-semibold">数据预览与编辑</div>
+          <div className="text-sm text-slate-600">
+            {total} 行 · 第 {page}/{totalPages} 页
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (!Number.isFinite(n) || n <= 0) return;
+              setPageSize(n);
+              setPage(1);
+            }}
+            className="rounded-md border px-2 py-2 text-sm"
+          >
+            <option value={50}>每页 50</option>
+            <option value={100}>每页 100</option>
+            <option value={200}>每页 200</option>
+            <option value={500}>每页 500</option>
+          </select>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-2 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            上一页
+          </button>
+          <button
+            type="button"
+            className="rounded-md border px-3 py-2 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            下一页
+          </button>
         <button
           type="button"
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-800"
@@ -72,6 +140,7 @@ export function DataGrid(props: Props) {
         >
           新增空行
         </button>
+        </div>
       </div>
 
       <div className="overflow-auto">
@@ -96,7 +165,8 @@ export function DataGrid(props: Props) {
             </tr>
           </thead>
           <tbody>
-            {props.items.map((row, rIdx) => {
+            {localItems.map((row, localIdx) => {
+              const rIdx = pageStart + localIdx;
               const rowNo = props.excelRowNumbers[rIdx] ?? rIdx + 1;
               const isDup = props.duplicateRowSet.has(rIdx);
               const isExisting = props.existingRowSet.has(rIdx);
