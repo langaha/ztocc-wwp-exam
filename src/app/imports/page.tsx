@@ -2,6 +2,8 @@ import { ensureDb, getDbClient } from "@/lib/db";
 import { datetimeLocalShanghaiToIso, formatDateTimeYmdHms } from "@/lib/datetime";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 function asString(v: string | string[] | undefined): string {
   if (typeof v === "string") return v;
   return "";

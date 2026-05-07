@@ -3,6 +3,8 @@ import { datetimeLocalShanghaiToIso, getShanghaiTodayRangeDatetimeLocal } from "
 import Link from "next/link";
 import { OrdersTableClient, type WaybillRow } from "./OrdersTableClient";
 
+export const dynamic = "force-dynamic";
+
 function asString(v: string | string[] | undefined): string {
   if (typeof v === "string") return v;
   return "";
