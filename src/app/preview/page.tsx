@@ -7,10 +7,12 @@ import * as XLSX from "xlsx";
 import { DataGrid } from "@/components/DataGrid";
 import { ErrorsPanel } from "@/components/ErrorsPanel";
 import { ProgressBar } from "@/components/ProgressBar";
+import { useSubmitTask } from "@/components/AppShell";
 import { clearImportSession, loadImportSession, saveImportSession } from "@/lib/importSession";
 import { createEmptyDraft, validateDraft, type ShipmentDraft } from "@/lib/shipment";
 
 export default function PreviewPage() {
+  const submitTask = useSubmitTask();
   const [loaded, setLoaded] = useState(false);
   const [fileName, setFileName] = useState<string>("");
   const [fingerprint, setFingerprint] = useState<string>("");
@@ -24,12 +26,6 @@ export default function PreviewPage() {
 
   const [existingCodes, setExistingCodes] = useState<Set<string>>(new Set());
   const [submitInfoByRow, setSubmitInfoByRow] = useState<Array<string | null>>([]);
-  const [submitProgress, setSubmitProgress] = useState<{ running: boolean; value: number; label: string }>({
-    running: false,
-    value: 0,
-    label: "",
-  });
-  const [submitSummary, setSubmitSummary] = useState<string>("");
 
   useEffect(() => {
     const session = loadImportSession();
@@ -45,6 +41,17 @@ export default function PreviewPage() {
     }
     setLoaded(true);
   }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (submitTask.clearToken === 0) return;
+    setItems([]);
+    setExcelRowNumbers([]);
+    setFieldErrorsByRow([]);
+    setSubmitInfoByRow([]);
+    setExistingCodes(new Set());
+    setExternalCodesVersion((v) => v + 1);
+  }, [loaded, submitTask.clearToken]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -150,7 +157,14 @@ export default function PreviewPage() {
 
   const hasDup = duplicateRowSet.size > 0;
   const hasExisting = existingRowSet.size > 0;
-  const canSubmit = loaded && items.length > 0 && !hasAnyFieldError && !hasDup && !hasExisting;
+  const hasBlockingIssues = loaded && items.length > 0 && (hasAnyFieldError || hasDup || hasExisting);
+  const canSubmit =
+    loaded &&
+    items.length > 0 &&
+    !hasAnyFieldError &&
+    !hasDup &&
+    !hasExisting &&
+    !submitTask.running;
 
   function exportExcel() {
     const rows = items.map((d) => ({
@@ -172,85 +186,38 @@ export default function PreviewPage() {
     XLSX.writeFile(wb, "preview_export.xlsx");
   }
 
-  async function submit() {
-    setSubmitSummary("");
-    setSubmitInfoByRow(new Array(items.length).fill(null));
-    setSubmitProgress({ running: true, value: 0, label: "创建导入任务…" });
-
-    const chunkSize = 100;
-    let ok = 0;
-    let fail = 0;
-
-    const startRes = await fetch("/api/import-tasks/start", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fileName, fingerprint, totalCount: items.length }),
-    });
-    const startJson = (await startRes.json().catch(() => null)) as { taskId?: unknown } | null;
-    const taskId = String(startJson?.taskId ?? "").trim();
-    if (!taskId) {
-      setSubmitProgress({ running: false, value: 0, label: "" });
-      setSubmitSummary("创建导入任务失败");
-      return;
-    }
-
-    for (let start = 0; start < items.length; start += chunkSize) {
-      const end = Math.min(items.length, start + chunkSize);
-      const chunk = items.slice(start, end);
-      const rowNos = excelRowNumbers.slice(start, end);
-
-      setSubmitProgress({
-        running: true,
-        value: start / items.length,
-        label: `提交中：${Math.round((start / items.length) * 100)}%（${start}/${items.length}）`,
-      });
-
-      const res = await fetch("/api/import-tasks/batch", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ taskId, items: chunk, excelRowNumbers: rowNos }),
-      });
-      const json = (await res.json().catch(() => null)) as
-        | { successCount?: number; failCount?: number; results?: Array<{ index: number; ok: boolean; error?: string }> }
-        | null;
-
-      ok += Number(json?.successCount ?? 0);
-      fail += Number(json?.failCount ?? 0);
-
-      const results = Array.isArray(json?.results) ? json!.results : [];
-      if (results.length > 0) {
-        setSubmitInfoByRow((prev) => {
-          const next = prev.slice();
-          for (const r of results) {
-            if (r.ok) continue;
-            const globalIdx = start + Number(r.index ?? 0);
-            const rowNo = excelRowNumbers[globalIdx] ?? globalIdx + 1;
-            next[globalIdx] = `第 ${rowNo} 行，提交失败：${r.error ?? "未知原因"}`;
-          }
-          return next;
-        });
-      }
-    }
-
-    setSubmitProgress({ running: true, value: 1, label: "完成任务…" });
-    const finishRes = await fetch("/api/import-tasks/finish", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ taskId }),
-    });
-    const finishJson = (await finishRes.json().catch(() => null)) as
-      | { successCount?: unknown; failCount?: unknown; taskId?: unknown }
-      | null;
-
-    const ok2 = Number(finishJson?.successCount ?? ok);
-    const fail2 = Number(finishJson?.failCount ?? fail);
-    setSubmitProgress({ running: false, value: 1, label: "" });
-    setSubmitSummary(`提交结果：成功 ${ok2} 条，失败 ${fail2} 条（任务：${taskId.slice(0, 8)}）`);
-  }
-
   if (!loaded) return null;
 
   if (items.length === 0) {
+    if (submitTask.summary) {
+      return (
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="text-base font-semibold">提交完成</div>
+          <div className="mt-3 rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-800">
+            {submitTask.summary}{" "}
+            <Link href="/imports" className="ml-2 underline">
+              查看导入记录
+            </Link>
+            <Link href="/orders" className="ml-2 underline">
+              查看已导入运单
+            </Link>
+          </div>
+          <div className="mt-4 text-sm text-slate-600">
+            导入数据已清空，可返回 <Link className="text-slate-900 underline" href="/">导入</Link>{" "}
+            页面继续上传 Excel。
+          </div>
+          <div className="mt-4">
+            <button
+              type="button"
+              className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50"
+              onClick={submitTask.clearSummary}
+            >
+              关闭提示
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="text-base font-semibold">暂无导入数据</div>
@@ -291,30 +258,58 @@ export default function PreviewPage() {
             >
               清空导入
             </button>
-            <button
-              type="button"
-              className={`rounded-md px-4 py-2 text-sm text-white ${
-                canSubmit && !submitProgress.running
-                  ? "bg-teal-600 hover:bg-teal-700"
-                  : "bg-slate-400"
-              }`}
-              disabled={!canSubmit || submitProgress.running}
-              onClick={() => void submit()}
+            <div
+              className="relative group"
+              title={
+                submitTask.running
+                  ? "提交任务正在进行"
+                  : !canSubmit
+                    ? "不能提交，请查看右侧错误提示"
+                    : ""
+              }
             >
-              提交下单
-            </button>
+              <button
+                type="button"
+                className={`rounded-md px-4 py-2 text-sm text-white ${
+                  canSubmit ? "bg-teal-600 hover:bg-teal-700" : "bg-slate-400"
+                }`}
+                disabled={!canSubmit}
+                onClick={() => {
+                  setSubmitInfoByRow(new Array(items.length).fill(null));
+                  void submitTask.start(
+                    { fileName, fingerprint, items, excelRowNumbers },
+                    {
+                      onRowFail: (globalIndex, rowNo, error) => {
+                        setSubmitInfoByRow((prev) => {
+                          const next = prev.slice();
+                          next[globalIndex] = `第 ${rowNo} 行，提交失败：${error}`;
+                          return next;
+                        });
+                      },
+                    }
+                  );
+                }}
+              >
+                提交下单
+              </button>
+              {!submitTask.running && !canSubmit ? (
+                <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-max -translate-x-1/2 rounded-md border bg-white px-3 py-2 text-xs text-slate-700 shadow-sm opacity-0 transition-opacity group-hover:opacity-100">
+                  查看右侧错误提示
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        {submitProgress.running ? (
+        {submitTask.progress.running ? (
           <div className="mt-4">
-            <ProgressBar value={submitProgress.value} label={submitProgress.label} />
+            <ProgressBar value={submitTask.progress.value} label={submitTask.progress.label} />
           </div>
         ) : null}
 
-        {submitSummary ? (
+        {submitTask.summary ? (
           <div className="mt-4 rounded-lg border bg-slate-50 px-3 py-2 text-sm text-slate-800">
-            {submitSummary}{" "}
+            {submitTask.summary}{" "}
             <Link href="/imports" className="ml-2 underline">
               查看导入记录
             </Link>
@@ -324,7 +319,7 @@ export default function PreviewPage() {
           </div>
         ) : null}
 
-        {!canSubmit ? (
+        {!submitTask.running && hasBlockingIssues ? (
           <div className="mt-3 text-sm text-slate-600">
             有错误/重复/已存在的数据时不允许提交；请先修正或删除对应行。
           </div>
