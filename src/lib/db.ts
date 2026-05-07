@@ -12,7 +12,7 @@ export type DbClient = {
 let pool: Pool | null = null;
 let ready: Promise<void> | null = null;
 
-function getDatabaseUrl(): string {
+function getDatabaseUrlRaw(): string {
   const url =
     process.env.DATABASE_URL ??
     process.env.POSTGRES_URL ??
@@ -26,10 +26,24 @@ function shouldUseSsl(url: string) {
   return u.includes("sslmode=require") || u.includes("ssl=true");
 }
 
+function stripSslModeParam(url: string): string {
+  const v = url.trim();
+  if (!v) return "";
+  try {
+    const u = new URL(v);
+    if (u.searchParams.has("sslmode")) u.searchParams.delete("sslmode");
+    return u.toString();
+  } catch {
+    return v
+      .replace(/([?&])sslmode=[^&]*(&|$)/gi, (_m, p1, p2) => (p2 ? p1 : ""))
+      .replace(/[?&]$/, "");
+  }
+}
+
 function getPool(): Pool {
   if (pool) return pool;
-  const url = getDatabaseUrl();
-  if (!url) {
+  const rawUrl = getDatabaseUrlRaw();
+  if (!rawUrl) {
     const keys = ["DATABASE_URL", "POSTGRES_URL", "PRISMA_DATABASE_URL"] as const;
     const present = keys.filter((k) => {
       const v = String(process.env[k] ?? "").trim();
@@ -40,9 +54,10 @@ function getPool(): Pool {
       `DATABASE_URL/POSTGRES_URL/PRISMA_DATABASE_URL is required. env=${env}, present=${present.join(",") || "none"}`
     );
   }
+  const url = stripSslModeParam(rawUrl);
   pool = new Pool({
     connectionString: url,
-    ssl: shouldUseSsl(url) ? { rejectUnauthorized: false } : undefined,
+    ssl: shouldUseSsl(rawUrl) ? { rejectUnauthorized: false } : undefined,
     max: 5,
   });
   return pool;
@@ -186,4 +201,3 @@ export async function ensureDb() {
   if (!ready) ready = migrate(getDbClient());
   await ready;
 }
-
