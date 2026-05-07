@@ -1,6 +1,7 @@
 import { ensureDb, getDbClient } from "@/lib/db";
 import { datetimeLocalShanghaiToIso, formatDateTimeYmdHms } from "@/lib/datetime";
 import Link from "next/link";
+import { DeleteTaskButton } from "./DeleteTaskButton";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,9 @@ export default async function ImportsPage(props: {
   });
   const tasks = taskRes.rows as Array<Record<string, unknown>>;
 
-  const selectedTaskId = taskId || (tasks[0]?.id ? String(tasks[0].id) : "");
+  const taskIdSet = new Set(tasks.map((t) => String(t.id ?? "")));
+  const selectedTaskId =
+    taskId && taskIdSet.has(taskId) ? taskId : tasks[0]?.id ? String(tasks[0].id) : "";
 
   let detailRows: Array<Record<string, unknown>> = [];
   let detailTotal = 0;
@@ -241,12 +244,13 @@ export default async function ImportsPage(props: {
                 <th className="border-b px-3 py-2 text-left font-medium text-slate-700">失败</th>
                 <th className="border-b px-3 py-2 text-left font-medium text-slate-700">状态</th>
                 <th className="border-b px-3 py-2 text-left font-medium text-slate-700">任务ID</th>
+                <th className="border-b px-3 py-2 text-left font-medium text-slate-700">操作</th>
               </tr>
             </thead>
             <tbody>
               {tasks.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-slate-600" colSpan={7}>
+                  <td className="px-3 py-6 text-center text-slate-600" colSpan={8}>
                     暂无导入任务
                   </td>
                 </tr>
@@ -307,6 +311,9 @@ export default async function ImportsPage(props: {
                         <Link href={href} className="block px-3 py-2 font-mono text-xs text-slate-700">
                           {id}
                         </Link>
+                      </td>
+                      <td className="border-b px-3 py-2">
+                        <DeleteTaskButton taskId={id} />
                       </td>
                     </tr>
                   );
