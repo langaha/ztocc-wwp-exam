@@ -10,7 +10,7 @@ type NavItem = { href: string; label: string };
 
 const navItems: NavItem[] = [
   { href: "/", label: "导入" },
-  { href: "/preview", label: "预览与编辑" },
+  { href: "/preview", label: "当前导入任务" },
   { href: "/imports", label: "导入记录" },
   { href: "/orders", label: "已导入运单" },
 ];

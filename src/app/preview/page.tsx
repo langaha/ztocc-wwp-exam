@@ -55,6 +55,12 @@ export default function PreviewPage() {
 
   useEffect(() => {
     if (!loaded) return;
+    if (!submitTask.running) return;
+    setExistingCodes(new Set());
+  }, [loaded, submitTask.running]);
+
+  useEffect(() => {
+    if (!loaded) return;
     const t = setTimeout(() => {
       const run = () =>
         saveImportSession({
@@ -103,6 +109,7 @@ export default function PreviewPage() {
 
   useEffect(() => {
     if (!loaded) return;
+    if (submitTask.running) return;
     const codes = Array.from(
       new Set(items.map((d) => String(d.externalCode ?? "").trim()).filter((c) => c))
     ).slice(0, 2000);
@@ -125,9 +132,15 @@ export default function PreviewPage() {
     }, 300);
 
     return () => clearTimeout(t);
-  }, [loaded, externalCodesVersion, items]);
+  }, [loaded, externalCodesVersion, items, submitTask.running]);
 
   const { existingInfoByRow, existingRowSet } = useMemo(() => {
+    if (submitTask.running) {
+      return {
+        existingInfoByRow: new Array<string | null>(items.length).fill(null),
+        existingRowSet: new Set<number>(),
+      };
+    }
     const info = new Array<string | null>(items.length).fill(null);
     const set = new Set<number>();
     for (let i = 0; i < items.length; i++) {
@@ -140,7 +153,7 @@ export default function PreviewPage() {
       }
     }
     return { existingInfoByRow: info, existingRowSet: set };
-  }, [items, existingCodes, excelRowNumbers]);
+  }, [items, existingCodes, excelRowNumbers, submitTask.running]);
 
   const submitFailedRowSet = useMemo(() => {
     const set = new Set<number>();

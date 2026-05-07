@@ -12,7 +12,7 @@ export function TopNav() {
             导入
           </Link>
           <Link href="/preview" className="text-slate-700 hover:text-slate-900">
-            预览与编辑
+            当前导入任务
           </Link>
           <Link href="/imports" className="text-slate-700 hover:text-slate-900">
             导入记录

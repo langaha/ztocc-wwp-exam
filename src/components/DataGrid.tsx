@@ -96,7 +96,7 @@ export function DataGrid(props: Props) {
     <div className="rounded-xl border bg-white">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="text-base font-semibold">数据预览与编辑</div>
+          <div className="text-base font-semibold">当前导入任务</div>
           <div className="text-sm text-slate-600">
             {total} 行 · 第 {page}/{totalPages} 页
           </div>
