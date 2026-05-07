@@ -2,6 +2,7 @@ import { ensureDb, getDbClient } from "@/lib/db";
 import { datetimeLocalShanghaiToIso, formatDateTimeYmdHms } from "@/lib/datetime";
 import Link from "next/link";
 import { DeleteTaskButton } from "./DeleteTaskButton";
+import { PageSizeSelect } from "@/components/PageSizeSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,13 @@ function asString(v: string | string[] | undefined): string {
 function clampPage(n: number) {
   if (!Number.isFinite(n) || n <= 0) return 1;
   return Math.floor(n);
+}
+
+function clampPageSize(n: number) {
+  const allowed = [20, 50, 100, 200];
+  if (!Number.isFinite(n)) return 20;
+  const v = Math.floor(n);
+  return allowed.includes(v) ? v : 20;
 }
 
 function toRangeDisplayValue(v: string) {
@@ -37,8 +45,8 @@ export default async function ImportsPage(props: {
   const taskId = asString(sp.taskId).trim();
   const taskPage = clampPage(Number(asString(sp.page)));
   const detailPage = clampPage(Number(asString(sp.detailPage)));
-  const pageSize = 10;
-  const detailPageSize = 20;
+  const pageSize = clampPageSize(Number(asString(sp.pageSize)));
+  const detailPageSize = clampPageSize(Number(asString(sp.detailPageSize)));
 
   const db = getDbClient();
 
@@ -123,12 +131,14 @@ export default async function ImportsPage(props: {
 
   const taskBaseParams = new URLSearchParams();
   taskBaseParams.set("page", String(safePage));
+  taskBaseParams.set("pageSize", String(pageSize));
   if (fileNameFilter) taskBaseParams.set("fileName", fileNameFilter);
   if (statusFilter) taskBaseParams.set("status", statusFilter);
   if (fromRaw) taskBaseParams.set("from", fromRaw);
   if (toRaw) taskBaseParams.set("to", toRaw);
   if (selectedTaskId) taskBaseParams.set("taskId", selectedTaskId);
   taskBaseParams.set("detailPage", String(safeDetailPage));
+  taskBaseParams.set("detailPageSize", String(detailPageSize));
 
   const taskPageLink = (p: number) => {
     const qp = new URLSearchParams(taskBaseParams);
@@ -333,6 +343,7 @@ export default async function ImportsPage(props: {
             第 <span className="font-medium">{safePage}</span> /{" "}
             <span className="font-medium">{totalPages}</span> 页
           </div>
+          <PageSizeSelect paramKey="pageSize" resetPageKey="page" defaultValue={20} options={[20, 50, 100, 200]} />
           <Link
             href={taskPageLink(Math.min(totalPages, safePage + 1))}
             className="rounded-lg border px-3 py-2 hover:bg-slate-50"
@@ -442,6 +453,7 @@ export default async function ImportsPage(props: {
             第 <span className="font-medium">{safeDetailPage}</span> /{" "}
             <span className="font-medium">{detailTotalPages}</span> 页
           </div>
+          <PageSizeSelect paramKey="detailPageSize" resetPageKey="detailPage" defaultValue={20} options={[20, 50, 100, 200]} />
           <Link
             href={detailPageLink(Math.min(detailTotalPages, safeDetailPage + 1))}
             className="rounded-lg border px-3 py-2 hover:bg-slate-50"

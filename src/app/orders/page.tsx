@@ -2,6 +2,7 @@ import { ensureDb, getDbClient } from "@/lib/db";
 import { datetimeLocalShanghaiToIso, getShanghaiTodayRangeDatetimeLocal } from "@/lib/datetime";
 import Link from "next/link";
 import { OrdersTableClient, type WaybillRow } from "./OrdersTableClient";
+import { PageSizeSelect } from "@/components/PageSizeSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,13 @@ function asString(v: string | string[] | undefined): string {
 function clampPage(n: number) {
   if (!Number.isFinite(n) || n <= 0) return 1;
   return Math.floor(n);
+}
+
+function clampPageSize(n: number) {
+  const allowed = [20, 50, 100, 200];
+  if (!Number.isFinite(n)) return 20;
+  const v = Math.floor(n);
+  return allowed.includes(v) ? v : 20;
 }
 
 function toRangeDisplayValue(v: string) {
@@ -37,7 +45,7 @@ export default async function OrdersPage(props: {
   const from = fromRaw ? datetimeLocalShanghaiToIso(fromRaw) : "";
   const to = toRaw ? datetimeLocalShanghaiToIso(toRaw) : "";
   const page = clampPage(Number(asString(sp.page)));
-  const pageSize = 20;
+  const pageSize = clampPageSize(Number(asString(sp.pageSize)));
 
   const where: string[] = [];
   const args: Array<string | number | null> = [];
@@ -118,6 +126,7 @@ export default async function OrdersPage(props: {
   if (keyword) baseParams.set("q", keyword);
   if (hasFrom) baseParams.set("from", fromRaw);
   if (hasTo) baseParams.set("to", toRaw);
+  baseParams.set("pageSize", String(pageSize));
 
   const pageLink = (p: number) => {
     const qp = new URLSearchParams(baseParams);
@@ -202,6 +211,7 @@ export default async function OrdersPage(props: {
           第 <span className="font-medium">{safePage}</span> /{" "}
           <span className="font-medium">{totalPages}</span> 页
         </div>
+        <PageSizeSelect paramKey="pageSize" resetPageKey="page" defaultValue={20} options={[20, 50, 100, 200]} />
         <Link href={pageLink(Math.min(totalPages, safePage + 1))} className="rounded-lg border px-3 py-2 hover:bg-slate-50">
           下一页
         </Link>
