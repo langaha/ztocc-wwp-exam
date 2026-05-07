@@ -1,4 +1,4 @@
-import { datetimeLocalShanghaiToIso } from "@/lib/datetime";
+import { getShanghaiLast7DaysRangeDatetimeLocal } from "@/lib/datetime";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ImportsDataSection } from "./ImportsDataSection";
@@ -29,13 +29,15 @@ export default async function ImportsPage(props: {
 
   const fileNameFilter = asString(sp.fileName).trim();
   const statusFilter = asString(sp.status).trim();
-  const fromRaw = toRangeDisplayValue(asString(sp.from));
-  const toRaw = toRangeDisplayValue(asString(sp.to));
+  const hasFrom = typeof sp.from !== "undefined";
+  const hasTo = typeof sp.to !== "undefined";
+  const defaults = getShanghaiLast7DaysRangeDatetimeLocal();
+  const fromRaw = toRangeDisplayValue(hasFrom ? asString(sp.from) : defaults.from);
+  const toRaw = toRangeDisplayValue(hasTo ? asString(sp.to) : defaults.to);
 
   const taskId = asString(sp.taskId).trim();
   const taskPage = clampPage(Number(asString(sp.page)));
   const detailPage = clampPage(Number(asString(sp.detailPage)));
-  void datetimeLocalShanghaiToIso;
   const pageSize = asString(sp.pageSize).trim();
   const detailPageSize = asString(sp.detailPageSize).trim();
   const suspenseKey = `imports:${fileNameFilter}:${statusFilter}:${fromRaw}:${toRaw}:${taskId}:${taskPage}:${detailPage}:${pageSize}:${detailPageSize}`;

@@ -1,4 +1,4 @@
-import { getShanghaiTodayRangeDatetimeLocal } from "@/lib/datetime";
+import { getShanghaiLast7DaysRangeDatetimeLocal } from "@/lib/datetime";
 import Link from "next/link";
 import { Suspense } from "react";
 import { OrdersDataSection } from "./OrdersDataSection";
@@ -31,7 +31,7 @@ export default async function OrdersPage(props: {
 
   const hasFrom = typeof sp.from !== "undefined";
   const hasTo = typeof sp.to !== "undefined";
-  const defaults = getShanghaiTodayRangeDatetimeLocal();
+  const defaults = getShanghaiLast7DaysRangeDatetimeLocal();
   const fromRaw = toRangeDisplayValue(hasFrom ? asString(sp.from) : defaults.from);
   const toRaw = toRangeDisplayValue(hasTo ? asString(sp.to) : defaults.to);
   const page = clampPage(Number(asString(sp.page)));
