@@ -40,7 +40,7 @@ export default async function ImportsPage(props: {
   const db = getDbClient();
 
   const where: string[] = [];
-  const whereArgs: unknown[] = [];
+  const whereArgs: Array<string | number | null> = [];
   if (fileNameFilter) {
     where.push("file_name LIKE ?");
     whereArgs.push(`%${fileNameFilter}%`);

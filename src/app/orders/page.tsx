@@ -38,7 +38,7 @@ export default async function OrdersPage(props: {
   const pageSize = 20;
 
   const where: string[] = [];
-  const args: unknown[] = [];
+  const args: Array<string | number | null> = [];
 
   if (keyword) {
     where.push(
