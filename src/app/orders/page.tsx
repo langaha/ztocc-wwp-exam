@@ -1,8 +1,8 @@
-import { ensureDb, getDbClient } from "@/lib/db";
-import { datetimeLocalShanghaiToIso, getShanghaiTodayRangeDatetimeLocal } from "@/lib/datetime";
+import { getShanghaiTodayRangeDatetimeLocal } from "@/lib/datetime";
 import Link from "next/link";
-import { OrdersTableClient, type WaybillRow } from "./OrdersTableClient";
-import { PageSizeSelect } from "@/components/PageSizeSelect";
+import { Suspense } from "react";
+import { OrdersDataSection } from "./OrdersDataSection";
+import { TableSkeleton } from "@/components/TableSkeleton";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +16,6 @@ function clampPage(n: number) {
   return Math.floor(n);
 }
 
-function clampPageSize(n: number) {
-  const allowed = [20, 50, 100, 200];
-  if (!Number.isFinite(n)) return 20;
-  const v = Math.floor(n);
-  return allowed.includes(v) ? v : 20;
-}
-
 function toRangeDisplayValue(v: string) {
   const s = v.trim();
   if (!s) return "";
@@ -32,7 +25,6 @@ function toRangeDisplayValue(v: string) {
 export default async function OrdersPage(props: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await ensureDb();
   const sp = (await props.searchParams) ?? {};
 
   const keyword = asString(sp.q).trim();
@@ -42,97 +34,9 @@ export default async function OrdersPage(props: {
   const defaults = getShanghaiTodayRangeDatetimeLocal();
   const fromRaw = toRangeDisplayValue(hasFrom ? asString(sp.from) : defaults.from);
   const toRaw = toRangeDisplayValue(hasTo ? asString(sp.to) : defaults.to);
-  const from = fromRaw ? datetimeLocalShanghaiToIso(fromRaw) : "";
-  const to = toRaw ? datetimeLocalShanghaiToIso(toRaw) : "";
   const page = clampPage(Number(asString(sp.page)));
-  const pageSize = clampPageSize(Number(asString(sp.pageSize)));
-
-  const where: string[] = [];
-  const args: Array<string | number | null> = [];
-
-  if (keyword) {
-    where.push(
-      "(" +
-        [
-          "external_code LIKE ?",
-          "sender_name LIKE ?",
-          "sender_phone LIKE ?",
-          "sender_address LIKE ?",
-          "receiver_name LIKE ?",
-          "receiver_phone LIKE ?",
-          "receiver_address LIKE ?",
-          "remark LIKE ?",
-        ].join(" OR ") +
-        ")"
-    );
-    const like = `%${keyword}%`;
-    args.push(like, like, like, like, like, like, like, like);
-  }
-
-  if (from) {
-    where.push("created_at >= ?");
-    args.push(from);
-  }
-
-  if (to) {
-    where.push("created_at <= ?");
-    args.push(to);
-  }
-
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const db = getDbClient();
-
-  const countRes = await db.execute({
-    sql: `SELECT COUNT(*) as cnt FROM waybills ${whereSql}`,
-    args,
-  });
-  const total = Number((countRes.rows[0] as { cnt?: unknown } | undefined)?.cnt ?? 0);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(page, totalPages);
-
-  const listRes = await db.execute({
-    sql: `
-      SELECT
-        id, external_code,
-        sender_name, sender_phone, sender_address,
-        receiver_name, receiver_phone, receiver_address,
-        weight_kg, piece_count, temp_layer, remark, created_at
-      FROM waybills
-      ${whereSql}
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
-    `,
-    args: [...args, pageSize, (safePage - 1) * pageSize],
-  });
-
-  const rows = listRes.rows as Array<Record<string, unknown>>;
-  const list: WaybillRow[] = rows.map((r) => ({
-    id: String(r.id ?? ""),
-    externalCode: String(r.external_code ?? ""),
-    senderName: String(r.sender_name ?? ""),
-    senderPhone: String(r.sender_phone ?? ""),
-    senderAddress: String(r.sender_address ?? ""),
-    receiverName: String(r.receiver_name ?? ""),
-    receiverPhone: String(r.receiver_phone ?? ""),
-    receiverAddress: String(r.receiver_address ?? ""),
-    weightKg: String(r.weight_kg ?? ""),
-    pieceCount: String(r.piece_count ?? ""),
-    tempLayer: String(r.temp_layer ?? ""),
-    remark: String(r.remark ?? ""),
-    createdAt: String(r.created_at ?? ""),
-  }));
-
-  const baseParams = new URLSearchParams();
-  if (keyword) baseParams.set("q", keyword);
-  if (hasFrom) baseParams.set("from", fromRaw);
-  if (hasTo) baseParams.set("to", toRaw);
-  baseParams.set("pageSize", String(pageSize));
-
-  const pageLink = (p: number) => {
-    const qp = new URLSearchParams(baseParams);
-    qp.set("page", String(p));
-    return `/orders?${qp.toString()}`;
-  };
+  const pageSize = asString(sp.pageSize).trim();
+  const suspenseKey = `orders:${keyword}:${fromRaw}:${toRaw}:${page}:${pageSize}`;
 
   return (
     <div className="space-y-6">
@@ -188,9 +92,6 @@ export default async function OrdersPage(props: {
           </div>
           <input type="hidden" name="page" value="1" />
           <div className="md:col-span-6 flex items-center justify-end gap-2">
-            <div className="mr-auto text-sm text-slate-600">
-              共 <span className="font-medium text-slate-900">{total}</span> 条
-            </div>
             <button
               type="submit"
               className="rounded-md bg-teal-600 px-4 py-2 text-sm text-white hover:bg-teal-700"
@@ -201,21 +102,23 @@ export default async function OrdersPage(props: {
         </form>
       </div>
 
-      <OrdersTableClient rows={list} />
-
-      <div className="flex items-center justify-between text-sm">
-        <Link href={pageLink(Math.max(1, safePage - 1))} className="rounded-lg border px-3 py-2 hover:bg-slate-50">
-          上一页
-        </Link>
-        <div className="text-slate-700">
-          第 <span className="font-medium">{safePage}</span> /{" "}
-          <span className="font-medium">{totalPages}</span> 页
-        </div>
-        <PageSizeSelect paramKey="pageSize" resetPageKey="page" defaultValue={20} options={[20, 50, 100, 200]} />
-        <Link href={pageLink(Math.min(totalPages, safePage + 1))} className="rounded-lg border px-3 py-2 hover:bg-slate-50">
-          下一页
-        </Link>
-      </div>
+      <Suspense
+        key={suspenseKey}
+        fallback={
+          <div className="space-y-4">
+            <div className="text-sm text-slate-600">加载中…</div>
+            <TableSkeleton columns={13} />
+          </div>
+        }
+      >
+        <OrdersDataSection
+          keyword={keyword}
+          fromRaw={fromRaw}
+          toRaw={toRaw}
+          page={String(page)}
+          pageSize={pageSize}
+        />
+      </Suspense>
     </div>
   );
 }

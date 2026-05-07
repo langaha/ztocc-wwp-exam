@@ -29,22 +29,24 @@ export function AppShell(props: { children: React.ReactNode }) {
   }, [pathname]);
 
   return (
-    <div className="min-h-dvh bg-slate-100">
-      <header className="h-12 bg-teal-700 text-white">
-        <div className="mx-auto flex h-12 w-full max-w-[1400px] items-center justify-between px-4">
+    <div className="flex h-dvh flex-col bg-slate-100">
+      <header className="shrink-0 border-b bg-white">
+        <div className="flex h-12 w-full items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <div className="h-7 w-7 rounded bg-white/15" />
-            <div className="text-sm font-semibold tracking-wide">万能导入</div>
+            <div className="h-7 w-7 rounded bg-slate-900" />
+            <div className="text-sm font-semibold tracking-wide text-slate-900">
+              ztocc-wwp-exam
+            </div>
           </div>
-          <div className="text-xs text-white/80">导入任务 / 运单管理</div>
+          <div className="text-xs text-slate-500">万能导入 / 运单管理</div>
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-[1400px] gap-4 px-4 py-4">
-        <aside className="w-56 shrink-0">
-          <div className="rounded-lg bg-slate-900 p-2 text-slate-200">
-            <div className="px-3 py-2 text-xs font-semibold text-slate-300">
-              导航菜单
+      <div className="flex flex-1 min-h-0">
+        <aside className="w-60 shrink-0 border-r bg-white">
+          <div className="h-full overflow-y-auto p-2">
+            <div className="px-3 py-2 text-xs font-semibold text-slate-500">
+              导航
             </div>
             <nav className="mt-1 space-y-1">
               {navItems.map((it) => {
@@ -52,8 +54,8 @@ export function AppShell(props: { children: React.ReactNode }) {
                 const base =
                   "block rounded-md px-3 py-2 text-sm transition-colors";
                 const cls = active
-                  ? "bg-teal-600 text-white"
-                  : "text-slate-200 hover:bg-slate-800";
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-700 hover:bg-slate-100 hover:text-slate-900";
                 return (
                   <Link key={it.href} href={it.href} className={`${base} ${cls}`}>
                     {it.label}
@@ -64,8 +66,8 @@ export function AppShell(props: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <section className="min-w-0 flex-1">
-          {props.children}
+        <section className="min-w-0 flex-1 overflow-y-auto">
+          <div className="p-4">{props.children}</div>
         </section>
       </div>
     </div>

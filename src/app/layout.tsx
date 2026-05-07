@@ -35,7 +35,7 @@ export default function RootLayout({
     >
       <body
         suppressHydrationWarning
-        className="min-h-full bg-slate-100 text-slate-900"
+        className="h-full overflow-hidden bg-slate-100 text-slate-900"
       >
         <AppShell>{children}</AppShell>
       </body>
